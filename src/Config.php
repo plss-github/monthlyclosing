@@ -3,15 +3,15 @@
 namespace GlpiPlugin\Monthlyclosing;
 
 use CommonGLPI;
-use Profile;
 use Session;
 
 /**
  * Configuração do plugin Fechamento Mensal.
  *
- * Permite selecionar:
- *  - Quais perfis GLPI podem acessar as configurações do plugin
- *  - Quais perfis terão o fechamento bloqueado durante a janela (vazio = todos)
+ * - Quais perfis podem acessar esta página de configuração
+ * - Quais perfis podem gerenciar janelas de fechamento (CRUD)
+ *
+ * O bloqueio Solucionado → Fechado é universal e não depende de perfil.
  */
 class Config extends CommonGLPI
 {
@@ -25,14 +25,9 @@ class Config extends CommonGLPI
     }
 
     // ------------------------------------------------------------------
-    // Verificação de acesso
+    // Verificação de acesso à configuração
     // ------------------------------------------------------------------
 
-    /**
-     * Retorna true se o perfil ativo do usuário pode configurar o plugin.
-     * Super-admin (profile id=4 por convenção) sempre pode; além disso,
-     * respeita a lista salva na configuração do plugin.
-     */
     public static function canCurrentProfileConfigure(): bool
     {
         if (!empty($_SESSION['glpiactiveprofile']['is_super_admin'])) {
@@ -45,7 +40,7 @@ class Config extends CommonGLPI
 
         $configProfileIds = RightsManager::getConfigProfileIds();
 
-        // Se a lista estiver vazia, qualquer um com right config/UPDATE pode configurar
+        // Lista vazia = qualquer perfil com direito config/UPDATE pode configurar
         if (empty($configProfileIds)) {
             return true;
         }
@@ -68,13 +63,32 @@ class Config extends CommonGLPI
             'LIMIT' => 1,
         ])->current();
 
-        if (!$row) {
-            return ['config_profiles_ids' => [], 'target_profiles_ids' => []];
-        }
-
         return [
             'config_profiles_ids' => json_decode($row['config_profiles_ids'] ?? '[]', true) ?: [],
         ];
+    }
+
+    /**
+     * Retorna os IDs dos perfis que têm direito de gerenciar janelas (RIGHT > 0).
+     */
+    public static function getWindowProfileIds(): array
+    {
+        global $DB;
+
+        $ids  = [];
+        $rows = $DB->request([
+            'FROM'  => 'glpi_profilerights',
+            'WHERE' => [
+                'name'   => Window::$rightname,
+                ['rights' => ['>', 0]],
+            ],
+        ]);
+
+        foreach ($rows as $row) {
+            $ids[] = (int) $row['profiles_id'];
+        }
+
+        return $ids;
     }
 
     // ------------------------------------------------------------------
@@ -85,12 +99,27 @@ class Config extends CommonGLPI
     {
         global $DB;
 
+        // --- Perfis que podem acessar a configuração ---
         $configIds = array_map('intval', (array) ($input['config_profiles_ids'] ?? []));
 
         $DB->update(self::TABLE, [
             'config_profiles_ids' => json_encode(array_values($configIds)),
             'date_mod'            => date('Y-m-d H:i:s'),
         ], ['id' => 1]);
+
+        // --- Perfis com direito de gerenciar janelas ---
+        $windowIds = array_map('intval', (array) ($input['window_profiles_ids'] ?? []));
+
+        // Remove todos os direitos existentes do plugin para reconstruir do zero
+        $DB->delete('glpi_profilerights', ['name' => Window::$rightname]);
+
+        foreach ($windowIds as $profileId) {
+            $DB->insert('glpi_profilerights', [
+                'profiles_id' => $profileId,
+                'name'        => Window::$rightname,
+                'rights'      => ALLSTANDARDRIGHT,
+            ]);
+        }
     }
 
     // ------------------------------------------------------------------
@@ -99,23 +128,29 @@ class Config extends CommonGLPI
 
     public static function showConfigForm(): void
     {
-        $config   = static::getConfig();
-        $profiles = static::getAllProfiles();
+        $config         = static::getConfig();
+        $profiles       = static::getAllProfiles();
+        $windowProfiles = static::getWindowProfileIds();
 
         echo '<form method="post" action="' . \Plugin::getWebDir('monthlyclosing') . '/front/config.form.php">';
         echo '<table class="tab_cadre_fixe">';
 
+        // --- Seção 1: quem pode configurar o plugin ---
         echo '<tr class="tab_bg_2"><th colspan="2">';
         echo __('Perfis que podem configurar o plugin', 'monthlyclosing');
-        echo ' <span class="badge bg-secondary ms-2">' . __('Vazio = qualquer admin', 'monthlyclosing') . '</span>';
+        echo ' <small class="text-muted ms-2">' . __('(vazio = qualquer admin)', 'monthlyclosing') . '</small>';
         echo '</th></tr>';
-
         echo '<tr class="tab_bg_1"><td colspan="2">';
-        static::showProfileCheckboxes(
-            'config_profiles_ids',
-            $profiles,
-            $config['config_profiles_ids']
-        );
+        static::showProfileCheckboxes('config_profiles_ids', $profiles, $config['config_profiles_ids']);
+        echo '</td></tr>';
+
+        // --- Seção 2: quem pode gerenciar janelas ---
+        echo '<tr class="tab_bg_2"><th colspan="2">';
+        echo __('Perfis que podem gerenciar janelas de fechamento', 'monthlyclosing');
+        echo ' <small class="text-muted ms-2">' . __('(criar, editar e excluir)', 'monthlyclosing') . '</small>';
+        echo '</th></tr>';
+        echo '<tr class="tab_bg_1"><td colspan="2">';
+        static::showProfileCheckboxes('window_profiles_ids', $profiles, $windowProfiles);
         echo '</td></tr>';
 
         echo '<tr class="tab_bg_2">';
@@ -153,10 +188,10 @@ class Config extends CommonGLPI
         foreach ($profiles as $id => $label) {
             $checked = in_array($id, $selected, true) ? 'checked' : '';
             echo '<div class="form-check form-check-inline">';
-            echo '<input class="form-check-input" type="checkbox" ';
-            echo 'name="' . htmlescape($name) . '[]" ';
-            echo 'id="' . htmlescape($name) . '_' . $id . '" ';
-            echo 'value="' . $id . '" ' . $checked . '>';
+            echo '<input class="form-check-input" type="checkbox"';
+            echo ' name="' . htmlescape($name) . '[]"';
+            echo ' id="' . htmlescape($name) . '_' . $id . '"';
+            echo ' value="' . $id . '" ' . $checked . '>';
             echo '<label class="form-check-label" for="' . htmlescape($name) . '_' . $id . '">';
             echo htmlescape($label);
             echo '</label>';

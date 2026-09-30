@@ -1,7 +1,6 @@
 <?php
 
 use Glpi\Plugin\Hooks;
-use GlpiPlugin\Monthlyclosing\Config;
 use GlpiPlugin\Monthlyclosing\Window;
 
 define('PLUGIN_MONTHLYCLOSING_VERSION', '1.0.0');
@@ -17,7 +16,7 @@ function plugin_init_monthlyclosing(): void
 
     $PLUGIN_HOOKS[Hooks::CSRF_COMPLIANT]['monthlyclosing'] = true;
 
-    // Hooks sem dependência de sessão (disparam via API e cron também)
+    // Registrado fora do bloco de sessão: dispara também via cron/API/CLI
     $PLUGIN_HOOKS[Hooks::PRE_ITEM_UPDATE]['monthlyclosing'] = [
         \Ticket::class  => 'plugin_monthlyclosing_pre_item_update_ticket',
         \Problem::class => 'plugin_monthlyclosing_pre_item_update_ticket',
@@ -30,15 +29,14 @@ function plugin_init_monthlyclosing(): void
 
     Plugin::registerClass(Window::class);
 
-    // Página de configuração — visível apenas para perfis autorizados
-    if (Config::canCurrentProfileConfigure()) {
-        $PLUGIN_HOOKS[Hooks::CONFIG_PAGE]['monthlyclosing'] = 'front/config.form.php';
-    }
+    // CONFIG_PAGE sempre registrado; controle de acesso feito no próprio front
+    $PLUGIN_HOOKS[Hooks::CONFIG_PAGE]['monthlyclosing'] = 'front/config.form.php';
 
-    // Menu em Gestão
-    $PLUGIN_HOOKS[Hooks::MENU_TOADD]['monthlyclosing'] = [
-        'management' => Window::class,
-    ];
+    if (Session::haveRight(Window::$rightname, READ)) {
+        $PLUGIN_HOOKS[Hooks::MENU_TOADD]['monthlyclosing'] = [
+            'management' => Window::class,
+        ];
+    }
 }
 
 /**
@@ -68,14 +66,14 @@ function plugin_monthlyclosing_check_config(bool $verbose = false): bool
 }
 
 // ---------------------------------------------------------------------------
-// Hook: bloqueia fechamento de ITIL durante janela ativa
+// Hook: bloqueia transição para FECHADO durante janela ativa
 // ---------------------------------------------------------------------------
 
 /**
  * Intercepta update de Ticket/Problem/Change.
- * Se houver janela ativa, impede mudança de status para FECHADO.
  *
- * @param \CommonITILObject $item
+ * Bloqueia qualquer transição para status CLOSED quando há janela ativa —
+ * independente do perfil do usuário e mesmo quando chamado pelo cron do GLPI.
  */
 function plugin_monthlyclosing_pre_item_update_ticket(\CommonITILObject $item): void
 {
@@ -87,16 +85,19 @@ function plugin_monthlyclosing_pre_item_update_ticket(\CommonITILObject $item): 
         return;
     }
 
-    if (!\GlpiPlugin\Monthlyclosing\RightsManager::currentUserIsBlocked()) {
+    if (!\GlpiPlugin\Monthlyclosing\Window::hasActiveWindow()) {
         return;
     }
 
-    // Cancela a mudança de status
+    // Remove o status do input — o update continua sem alterar o status
     unset($item->input['status']);
 
-    Session::addMessageAfterRedirect(
-        __('Fechamento bloqueado: há uma janela de fechamento mensal ativa. Chamados só podem ser marcados como Solucionados neste período.', 'monthlyclosing'),
-        true,
-        WARNING
-    );
+    // Exibe mensagem apenas quando há sessão de usuário (não para cron/CLI)
+    if (Session::getLoginUserID()) {
+        Session::addMessageAfterRedirect(
+            __('Fechamento bloqueado: há uma janela de fechamento mensal ativa. Chamados só podem ser marcados como Solucionados neste período.', 'monthlyclosing'),
+            true,
+            WARNING
+        );
+    }
 }

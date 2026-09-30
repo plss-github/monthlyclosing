@@ -74,7 +74,6 @@ class Config extends CommonGLPI
 
         return [
             'config_profiles_ids' => json_decode($row['config_profiles_ids'] ?? '[]', true) ?: [],
-            'target_profiles_ids' => json_decode($row['target_profiles_ids'] ?? '[]', true) ?: [],
         ];
     }
 
@@ -86,12 +85,10 @@ class Config extends CommonGLPI
     {
         global $DB;
 
-        $configIds  = array_map('intval', (array) ($input['config_profiles_ids'] ?? []));
-        $targetIds  = array_map('intval', (array) ($input['target_profiles_ids'] ?? []));
+        $configIds = array_map('intval', (array) ($input['config_profiles_ids'] ?? []));
 
         $DB->update(self::TABLE, [
             'config_profiles_ids' => json_encode(array_values($configIds)),
-            'target_profiles_ids' => json_encode(array_values($targetIds)),
             'date_mod'            => date('Y-m-d H:i:s'),
         ], ['id' => 1]);
     }
@@ -118,19 +115,6 @@ class Config extends CommonGLPI
             'config_profiles_ids',
             $profiles,
             $config['config_profiles_ids']
-        );
-        echo '</td></tr>';
-
-        echo '<tr class="tab_bg_2"><th colspan="2">';
-        echo __('Perfis com fechamento bloqueado durante a janela', 'monthlyclosing');
-        echo ' <span class="badge bg-secondary ms-2">' . __('Vazio = todos os perfis', 'monthlyclosing') . '</span>';
-        echo '</th></tr>';
-
-        echo '<tr class="tab_bg_1"><td colspan="2">';
-        static::showProfileCheckboxes(
-            'target_profiles_ids',
-            $profiles,
-            $config['target_profiles_ids']
         );
         echo '</td></tr>';
 

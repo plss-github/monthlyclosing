@@ -81,6 +81,28 @@ function plugin_monthlyclosing_install(): bool
     }
 
     // ------------------------------------------------------------------
+    // Direitos do plugin: concede ao(s) perfil(is) super-admin
+    // ------------------------------------------------------------------
+    $superAdminProfiles = $DB->request([
+        'FROM'  => 'glpi_profiles',
+        'WHERE' => ['is_super_admin' => 1],
+    ]);
+    foreach ($superAdminProfiles as $profile) {
+        $existing = $DB->request([
+            'FROM'  => 'glpi_profilerights',
+            'WHERE' => ['profiles_id' => $profile['id'], 'name' => Window::$rightname],
+        ])->current();
+
+        if (!$existing) {
+            $DB->insert('glpi_profilerights', [
+                'profiles_id' => $profile['id'],
+                'name'        => Window::$rightname,
+                'rights'      => ALLSTANDARDRIGHT,
+            ]);
+        }
+    }
+
+    // ------------------------------------------------------------------
     // Cron: verifica janelas a cada minuto
     // ------------------------------------------------------------------
     CronTask::register(

@@ -1,0 +1,28 @@
+{
+    "name": "plss/monthlyclosing",
+    "description": "GLPI plugin for monthly closing management",
+    "type": "glpi-plugin",
+    "license": "GPL-3.0-or-later",
+    "authors": [
+        {
+            "name": "PLSS",
+            "email": "higor.freitas@plss.com.br"
+        }
+    ],
+    "require": {
+        "php": ">=8.2"
+    },
+    "require-dev": {
+        "glpi-project/coding-standard": "^1.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "GlpiPlugin\\Monthlyclosing\\": "src/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true
+        }
+    }
+}

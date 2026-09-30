@@ -1,0 +1,54 @@
+# GLPI Plugin - Fechamento Mensal — Português (Brasil)
+# Copyright (C) 2024 PLSS
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: monthlyclosing 1.0.0\n"
+"PO-Revision-Date: 2024-01-01 00:00+0000\n"
+"Language-Team: Portuguese (Brazil)\n"
+"Language: pt_BR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Fechamento Mensal"
+msgstr "Fechamento Mensal"
+
+msgid "Fechamentos Mensais"
+msgstr "Fechamentos Mensais"
+
+msgid "Mês"
+msgstr "Mês"
+
+msgid "Ano"
+msgstr "Ano"
+
+msgid "Status"
+msgstr "Status"
+
+msgid "Data de Fechamento"
+msgstr "Data de Fechamento"
+
+msgid "Comentário"
+msgstr "Comentário"
+
+msgid "Aberto"
+msgstr "Aberto"
+
+msgid "Fechado"
+msgstr "Fechado"
+
+msgid "Configuração - Fechamento Mensal"
+msgstr "Configuração - Fechamento Mensal"
+
+msgid "Configuração"
+msgstr "Configuração"
+
+msgid "Bloquear abertura de chamados em períodos fechados"
+msgstr "Bloquear abertura de chamados em períodos fechados"
+
+msgid "Bloquear atualizações em chamados de períodos fechados"
+msgstr "Bloquear atualizações em chamados de períodos fechados"
+
+msgid "Período fechado: não é possível abrir chamados neste mês."
+msgstr "Período fechado: não é possível abrir chamados neste mês."

@@ -35,7 +35,7 @@ class Config extends CommonGLPI
      */
     public static function canCurrentProfileConfigure(): bool
     {
-        if (Session::isSuperAdmin()) {
+        if (!empty($_SESSION['glpiactiveprofile']['is_super_admin'])) {
             return true;
         }
 

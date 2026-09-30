@@ -207,7 +207,7 @@ class Window extends CommonDBTM
         return $tab;
     }
 
-    public function showForm(int $ID, array $options = []): bool
+    public function showForm($ID, array $options = []): bool
     {
         $this->initForm($ID, $options);
         $this->showFormHeader($options);
@@ -268,7 +268,7 @@ class Window extends CommonDBTM
         return true;
     }
 
-    public function prepareInputForAdd($input): array|false
+    public function prepareInputForAdd($input)
     {
         if (empty($input['date_start']) || empty($input['date_end'])) {
             Session::addMessageAfterRedirect(__('Informe as datas de início e fim.', 'monthlyclosing'), true, ERROR);
@@ -283,7 +283,7 @@ class Window extends CommonDBTM
         return $input;
     }
 
-    public function prepareInputForUpdate($input): array|false
+    public function prepareInputForUpdate($input)
     {
         // Bloqueia alteração de datas em janelas ativas ou encerradas
         $lockedStatuses = [self::STATUS_ACTIVE, self::STATUS_FINISHED];

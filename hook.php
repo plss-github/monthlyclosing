@@ -40,7 +40,7 @@ function plugin_monthlyclosing_install(): bool
     }
 
     // ------------------------------------------------------------------
-    // Backup de configurações de entidades (autoclose_delay)
+    // Backup de configurações de entidades (autoclose_delay + autopurge_delay)
     // ------------------------------------------------------------------
     $backupTable = RightsManager::getBackupTable();
     if (!$DB->tableExists($backupTable)) {
@@ -49,11 +49,15 @@ function plugin_monthlyclosing_install(): bool
             `windows_id`      int {$sign} NOT NULL DEFAULT '0',
             `entities_id`     int {$sign} NOT NULL DEFAULT '0',
             `autoclose_delay` int NOT NULL DEFAULT '0',
+            `autopurge_delay` int NOT NULL DEFAULT '0',
             `date_creation`   timestamp NULL DEFAULT NULL,
             PRIMARY KEY (`id`),
             KEY `windows_id`  (`windows_id`),
             KEY `entities_id` (`entities_id`)
         ) ENGINE=InnoDB DEFAULT CHARSET={$charset} COLLATE={$collation} ROW_FORMAT=DYNAMIC");
+    } else {
+        // Upgrade: adiciona coluna autopurge_delay se ainda não existir
+        $migration->addField($backupTable, 'autopurge_delay', 'integer', ['value' => 0, 'after' => 'autoclose_delay']);
     }
 
     // ------------------------------------------------------------------

@@ -3,7 +3,7 @@
 use Glpi\Plugin\Hooks;
 use GlpiPlugin\Monthlyclosing\Window;
 
-define('PLUGIN_MONTHLYCLOSING_VERSION', '1.1.0');
+define('PLUGIN_MONTHLYCLOSING_VERSION', '1.1.1');
 define('PLUGIN_MONTHLYCLOSING_MIN_GLPI', '11.0.0');
 define('PLUGIN_MONTHLYCLOSING_MAX_GLPI', '11.0.99');
 

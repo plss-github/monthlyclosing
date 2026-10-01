@@ -4,7 +4,7 @@
 {% block form_fields %}
     {{ fields.textField(
         'name',
-        item.fields['name'],
+        item.fields['name']|default(''),
         __('Nome', 'monthlyclosing'),
         field_options|merge({'readonly': is_locked})
     ) }}
@@ -27,21 +27,51 @@
     {% endif %}
 
     {% if is_locked %}
-        {{ fields.readOnlyField('date_start', item.fields['date_start']|formatted_datetime, __('Início da janela', 'monthlyclosing'), field_options) }}
-        {{ fields.readOnlyField('date_end', item.fields['date_end']|formatted_datetime, __('Fim da janela', 'monthlyclosing'), field_options) }}
+        {{ fields.readOnlyField(
+            'date_start',
+            item.fields['date_start']|default('')|formatted_datetime,
+            __('Início da janela', 'monthlyclosing'),
+            field_options
+        ) }}
+        {{ fields.readOnlyField(
+            'date_end',
+            item.fields['date_end']|default('')|formatted_datetime,
+            __('Fim da janela', 'monthlyclosing'),
+            field_options
+        ) }}
     {% else %}
-        {{ fields.datetimeField('date_start', item.fields['date_start'], __('Início da janela', 'monthlyclosing'), field_options|merge({'required': true})) }}
-        {{ fields.datetimeField('date_end', item.fields['date_end'], __('Fim da janela', 'monthlyclosing'), field_options|merge({'required': true})) }}
+        {{ fields.datetimeField(
+            'date_start',
+            item.fields['date_start']|default(''),
+            __('Início da janela', 'monthlyclosing'),
+            field_options|merge({'required': true})
+        ) }}
+        {{ fields.datetimeField(
+            'date_end',
+            item.fields['date_end']|default(''),
+            __('Fim da janela', 'monthlyclosing'),
+            field_options|merge({'required': true})
+        ) }}
     {% endif %}
 
     {% if not item.isNewItem() %}
-        {{ fields.readOnlyField('date_activation', item.fields['date_activation']|formatted_datetime, __('Ativada em', 'monthlyclosing'), field_options) }}
-        {{ fields.readOnlyField('date_deactivation', item.fields['date_deactivation']|formatted_datetime, __('Desativada em', 'monthlyclosing'), field_options) }}
+        {{ fields.readOnlyField(
+            'date_activation',
+            item.fields['date_activation']|default('')|formatted_datetime,
+            __('Ativada em', 'monthlyclosing'),
+            field_options
+        ) }}
+        {{ fields.readOnlyField(
+            'date_deactivation',
+            item.fields['date_deactivation']|default('')|formatted_datetime,
+            __('Desativada em', 'monthlyclosing'),
+            field_options
+        ) }}
     {% endif %}
 
     {{ fields.textareaField(
         'comment',
-        item.fields['comment'],
+        item.fields['comment']|default(''),
         __('Comentário', 'monthlyclosing'),
         field_options
     ) }}

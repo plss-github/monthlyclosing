@@ -3,7 +3,7 @@
 use Glpi\Plugin\Hooks;
 use GlpiPlugin\Monthlyclosing\Window;
 
-define('PLUGIN_MONTHLYCLOSING_VERSION', '1.1.1');
+define('PLUGIN_MONTHLYCLOSING_VERSION', '1.1.2');
 define('PLUGIN_MONTHLYCLOSING_MIN_GLPI', '11.0.0');
 define('PLUGIN_MONTHLYCLOSING_MAX_GLPI', '11.0.99');
 
@@ -37,6 +37,72 @@ function plugin_init_monthlyclosing(): void
             'management' => Window::class,
         ];
     }
+
+    // Oculta status "Fechado" e botão de aprovação de solução durante janela ativa
+    $PLUGIN_HOOKS[Hooks::POST_ITEM_FORM]['monthlyclosing'] = 'plugin_monthlyclosing_post_item_form';
+}
+
+/**
+ * Injeta JS para ocultar status "Fechado" e aprovação de solução nos formulários
+ * de Ticket, Problem e Change quando há janela de fechamento ativa.
+ */
+function plugin_monthlyclosing_post_item_form(array $params): void
+{
+    $item = $params['item'] ?? null;
+    if (!($item instanceof \Ticket) && !($item instanceof \Problem) && !($item instanceof \Change)) {
+        return;
+    }
+
+    if (!\GlpiPlugin\Monthlyclosing\Window::hasActiveWindow()) {
+        return;
+    }
+    ?>
+    <script>
+    (function () {
+        'use strict';
+        if (window.MONTHLYCLOSING_INIT) { return; }
+        window.MONTHLYCLOSING_INIT = true;
+
+        function applyRestrictions() {
+            // Remove a opção "Fechado" (valor=6) dos dropdowns de status
+            document.querySelectorAll('select[name="status"] option[value="6"]').forEach(function (opt) {
+                opt.remove();
+            });
+
+            // Atualiza instâncias do select2 para refletir a remoção
+            if (window.jQuery) {
+                jQuery('select[name="status"]').each(function () {
+                    if (jQuery(this).data('select2')) {
+                        jQuery(this).trigger('change');
+                    }
+                });
+            }
+
+            // Oculta formulários de aprovação de solução que fechariam o chamado (status=6)
+            document.querySelectorAll('input[name="status"][value="6"]').forEach(function (input) {
+                var form = input.closest('form');
+                if (form) {
+                    form.style.display = 'none';
+                }
+            });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', applyRestrictions);
+        } else {
+            applyRestrictions();
+        }
+
+        // Observa conteúdo carregado via AJAX (timeline de chamados, etc.)
+        if (window.MutationObserver) {
+            new MutationObserver(applyRestrictions).observe(document.body, {
+                childList: true,
+                subtree:   true,
+            });
+        }
+    })();
+    </script>
+    <?php
 }
 
 /**

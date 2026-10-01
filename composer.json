@@ -1,7 +1,7 @@
 {
     "name": "plss/monthlyclosing",
     "description": "GLPI plugin for monthly closing management",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "type": "glpi-plugin",
     "license": "GPL-3.0-or-later",
     "authors": [

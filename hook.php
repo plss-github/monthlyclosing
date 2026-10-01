@@ -144,6 +144,12 @@ function plugin_monthlyclosing_install(): bool
         ]
     );
 
+    // register() não atualiza tarefas já existentes — forçamos a frequência correta
+    $DB->update('glpi_crontasks', ['frequency' => MINUTE_TIMESTAMP], [
+        'itemtype' => Window::class,
+        'name'     => 'MonthlyClosing',
+    ]);
+
     $migration->executeMigration();
 
     // Diretório de dados do plugin

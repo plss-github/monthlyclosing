@@ -13,7 +13,7 @@ namespace GlpiPlugin\Monthlyclosing;
  *   - Restaura os valores originais de cada entidade
  *
  * O bloqueio de status "Fechado" nos objetos ITIL é feito via hook pre_item_update
- * em setup.php — bloqueia TODOS os usuários e o próprio cron do GLPI.
+ * em setup.php — bloqueia os perfis configurados (vazio = todos) e o próprio cron do GLPI.
  */
 class RightsManager
 {
@@ -35,13 +35,20 @@ class RightsManager
 
         $now = date('Y-m-d H:i:s');
 
+        // Outra janela já está ativa: o autoclose já foi desativado e os valores
+        // originais estão no backup dela (repassado a esta janela no restore()).
+        $other = self::getOtherActiveWindowId($window);
+        if ($other !== null) {
+            return;
+        }
+
         // Lê todas as entidades e salva backup antes de alterar
         $entities = $DB->request(['FROM' => 'glpi_entities']);
 
         foreach ($entities as $entity) {
             $originalDelay = isset($entity['autoclose_delay'])
                 ? (int) $entity['autoclose_delay']
-                : -1; // -1 = herda do pai (valor padrão seguro para restaurar)
+                : \Entity::CONFIG_PARENT; // herda do pai (valor padrão seguro para restaurar)
 
             $DB->insert(self::BACKUP_TABLE, [
                 'windows_id'      => $window->fields['id'],
@@ -50,8 +57,8 @@ class RightsManager
                 'date_creation'   => $now,
             ]);
 
-            // 0 = nunca fechar automaticamente
-            $DB->update('glpi_entities', ['autoclose_delay' => 0], ['id' => $entity['id']]);
+            // CONFIG_NEVER (-10) = nunca fechar automaticamente (0 significa "imediatamente")
+            $DB->update('glpi_entities', ['autoclose_delay' => \Entity::CONFIG_NEVER], ['id' => $entity['id']]);
         }
     }
 
@@ -62,6 +69,17 @@ class RightsManager
     public static function restore(Window $window): void
     {
         global $DB;
+
+        // Se outra janela continua ativa, não restaura: repassa os backups para ela
+        $other = self::getOtherActiveWindowId($window);
+        if ($other !== null) {
+            $DB->update(
+                self::BACKUP_TABLE,
+                ['windows_id' => $other],
+                ['windows_id' => $window->fields['id']]
+            );
+            return;
+        }
 
         // Lê TODOS os backups ANTES de deletar qualquer registro
         $backups = iterator_to_array(
@@ -80,6 +98,26 @@ class RightsManager
 
         // Remove backups somente após restaurar tudo
         $DB->delete(self::BACKUP_TABLE, ['windows_id' => $window->fields['id']]);
+    }
+
+    /**
+     * Retorna o ID de outra janela ativa (diferente da informada), ou null.
+     */
+    private static function getOtherActiveWindowId(Window $window): ?int
+    {
+        global $DB;
+
+        $row = $DB->request([
+            'SELECT' => ['id'],
+            'FROM'   => Window::getTable(),
+            'WHERE'  => [
+                'status' => Window::STATUS_ACTIVE,
+                ['NOT' => ['id' => $window->fields['id']]],
+            ],
+            'LIMIT'  => 1,
+        ])->current();
+
+        return $row ? (int) $row['id'] : null;
     }
 
     // ------------------------------------------------------------------

@@ -16,7 +16,7 @@ Html::header(
     Config::getTypeName(),
     $_SERVER['PHP_SELF'],
     'config',
-    Config::class
+    'plugin'
 );
 
 Config::showConfigForm();

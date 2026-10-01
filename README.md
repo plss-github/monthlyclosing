@@ -1,7 +1,7 @@
 # Fechamento Mensal — GLPI Plugin
 
 **Autor:** Pellissari  
-**Versão:** 1.0.0  
+**Versão:** 1.1.0  
 **Compatibilidade:** GLPI 11.0.x / PHP ≥ 8.2  
 **Licença:** GPLv3+
 
@@ -12,10 +12,10 @@
 Durante uma **janela de fechamento** configurada (intervalo de data/hora), o plugin:
 
 - **Bloqueia o fechamento** de Chamados, Problemas e Mudanças — o status só pode avançar até *Solucionado*; a tentativa de marcar como *Fechado* é rejeitada com mensagem de aviso.
-- **Desativa o autoclose** das entidades (`autoclose_delay = 0`) para que nenhum chamado seja fechado automaticamente no período.
+- **Desativa o autoclose** das entidades (fechamento automático = *Nunca*) para que nenhum chamado seja fechado automaticamente no período.
 - Ao encerrar a janela, **restaura** todos os valores de autoclose salvos em backup.
 
-O bloqueio respeita a lista de **perfis-alvo** configurada: se a lista estiver vazia, todos os perfis são bloqueados; caso contrário, somente os perfis selecionados.
+O bloqueio respeita a lista de **perfis-alvo** configurada: se a lista estiver vazia, todos os perfis são bloqueados; caso contrário, somente os perfis selecionados. Ações automáticas (cron/CLI), que não têm perfil, são sempre bloqueadas.
 
 ---
 
@@ -26,6 +26,7 @@ Em **Configuração → Plugins → Fechamento Mensal**:
 | Campo | Função |
 |---|---|
 | Perfis que podem configurar o plugin | Quais perfis GLPI acessam esta tela (vazio = qualquer admin) |
+| Perfis que podem gerenciar janelas de fechamento | Quais perfis podem criar, editar e excluir janelas |
 | Perfis com fechamento bloqueado | Quais perfis têm o status "Fechado" bloqueado durante a janela (vazio = todos) |
 
 ---
@@ -38,7 +39,7 @@ Menu **Gestão → Janelas de Fechamento**.
 |---|---|
 | Nome | Identificação da janela (ex.: "Fechamento Jan/2025") |
 | Início / Fim | Intervalo exato em que o bloqueio estará vigente |
-| Status | Pendente → Ativa → Encerrada (gerenciado pelo cron) |
+| Status | Pendente → Ativa → Encerrada (gerenciado pelo cron); uma janela pendente pode ser Cancelada |
 
 O cron **MonthlyClosing** (executado a cada minuto) ativa e desativa as janelas automaticamente.
 

@@ -3,7 +3,7 @@
 use Glpi\Plugin\Hooks;
 use GlpiPlugin\Monthlyclosing\Window;
 
-define('PLUGIN_MONTHLYCLOSING_VERSION', '1.0.2');
+define('PLUGIN_MONTHLYCLOSING_VERSION', '1.1.0');
 define('PLUGIN_MONTHLYCLOSING_MIN_GLPI', '11.0.0');
 define('PLUGIN_MONTHLYCLOSING_MAX_GLPI', '11.0.99');
 
@@ -72,8 +72,9 @@ function plugin_monthlyclosing_check_config(bool $verbose = false): bool
 /**
  * Intercepta update de Ticket/Problem/Change.
  *
- * Bloqueia qualquer transição para status CLOSED quando há janela ativa —
- * independente do perfil do usuário e mesmo quando chamado pelo cron do GLPI.
+ * Bloqueia a transição para status CLOSED quando há janela ativa, para os
+ * perfis configurados (vazio = todos). Execuções sem sessão (cron do GLPI,
+ * CLI) são sempre bloqueadas.
  */
 function plugin_monthlyclosing_pre_item_update_ticket(\CommonITILObject $item): void
 {
@@ -86,6 +87,10 @@ function plugin_monthlyclosing_pre_item_update_ticket(\CommonITILObject $item): 
     }
 
     if (!\GlpiPlugin\Monthlyclosing\Window::hasActiveWindow()) {
+        return;
+    }
+
+    if (!\GlpiPlugin\Monthlyclosing\Config::isClosingBlockedForCurrentProfile()) {
         return;
     }
 

@@ -23,15 +23,15 @@ function plugin_monthlyclosing_install(): bool
         $DB->doQuery("CREATE TABLE `{$windowTable}` (
             `id`           int {$sign} NOT NULL AUTO_INCREMENT,
             `name`         varchar(255) DEFAULT NULL,
-            `date_start`   datetime NOT NULL,
-            `date_end`     datetime NOT NULL,
+            `date_start`   timestamp NULL DEFAULT NULL,
+            `date_end`     timestamp NULL DEFAULT NULL,
             `status`       tinyint NOT NULL DEFAULT '0'
                            COMMENT '0=pendente 1=ativa 2=encerrada 3=cancelada',
             `comment`      text DEFAULT NULL,
-            `date_activation` datetime DEFAULT NULL,
-            `date_deactivation` datetime DEFAULT NULL,
-            `date_creation` datetime DEFAULT NULL,
-            `date_mod`     datetime DEFAULT NULL,
+            `date_activation` timestamp NULL DEFAULT NULL,
+            `date_deactivation` timestamp NULL DEFAULT NULL,
+            `date_creation` timestamp NULL DEFAULT NULL,
+            `date_mod`     timestamp NULL DEFAULT NULL,
             PRIMARY KEY (`id`),
             KEY `status`       (`status`),
             KEY `date_start`   (`date_start`),
@@ -49,7 +49,7 @@ function plugin_monthlyclosing_install(): bool
             `windows_id`      int {$sign} NOT NULL DEFAULT '0',
             `entities_id`     int {$sign} NOT NULL DEFAULT '0',
             `autoclose_delay` int NOT NULL DEFAULT '0',
-            `date_creation`   datetime DEFAULT NULL,
+            `date_creation`   timestamp NULL DEFAULT NULL,
             PRIMARY KEY (`id`),
             KEY `windows_id`  (`windows_id`),
             KEY `entities_id` (`entities_id`)
@@ -67,7 +67,7 @@ function plugin_monthlyclosing_install(): bool
                                     COMMENT 'JSON: IDs dos perfis que podem configurar o plugin',
             `target_profiles_ids`   text DEFAULT NULL
                                     COMMENT 'JSON: IDs dos perfis bloqueados (NULL/vazio = todos)',
-            `date_mod`              datetime DEFAULT NULL,
+            `date_mod`              timestamp NULL DEFAULT NULL,
             PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET={$charset} COLLATE={$collation} ROW_FORMAT=DYNAMIC");
 
@@ -83,21 +83,46 @@ function plugin_monthlyclosing_install(): bool
     // ------------------------------------------------------------------
     // Direitos do plugin: concede ao(s) perfil(is) super-admin
     // ------------------------------------------------------------------
-    $superAdminProfiles = $DB->request([
-        'FROM'  => 'glpi_profiles',
-        'WHERE' => ['is_super_admin' => 1],
-    ]);
-    foreach ($superAdminProfiles as $profile) {
+    foreach (Profile::getSuperAdminProfilesId() as $profileId) {
         $existing = $DB->request([
             'FROM'  => 'glpi_profilerights',
-            'WHERE' => ['profiles_id' => $profile['id'], 'name' => Window::$rightname],
+            'WHERE' => ['profiles_id' => $profileId, 'name' => Window::$rightname],
         ])->current();
 
         if (!$existing) {
             $DB->insert('glpi_profilerights', [
-                'profiles_id' => $profile['id'],
+                'profiles_id' => $profileId,
                 'name'        => Window::$rightname,
                 'rights'      => ALLSTANDARDRIGHT,
+            ]);
+        } elseif ((int) $existing['rights'] === 0) {
+            $DB->update('glpi_profilerights', ['rights' => ALLSTANDARDRIGHT], ['id' => $existing['id']]);
+        }
+    }
+
+    // Atualiza os direitos da sessão atual (evita precisar relogar após instalar)
+    if (Session::getLoginUserID() && isset($_SESSION['glpiactiveprofile']['id'])) {
+        $_SESSION['glpiactiveprofile'][Window::$rightname] = (int) (ProfileRight::getProfileRights(
+            $_SESSION['glpiactiveprofile']['id'],
+            [Window::$rightname]
+        )[Window::$rightname] ?? 0);
+    }
+
+    // ------------------------------------------------------------------
+    // Colunas padrão da listagem (Início, Fim, Status)
+    // ------------------------------------------------------------------
+    $hasPrefs = $DB->request([
+        'FROM'  => 'glpi_displaypreferences',
+        'WHERE' => ['itemtype' => Window::class, 'users_id' => 0],
+        'LIMIT' => 1,
+    ])->count() > 0;
+    if (!$hasPrefs) {
+        foreach ([11, 12, 13] as $rank => $num) {
+            $DB->insert('glpi_displaypreferences', [
+                'itemtype' => Window::class,
+                'num'      => $num,
+                'rank'     => $rank + 1,
+                'users_id' => 0,
             ]);
         }
     }
@@ -134,7 +159,7 @@ function plugin_monthlyclosing_uninstall(): bool
     global $DB;
 
     // Garante que qualquer janela ativa seja desativada antes de remover
-    $activeWindows = $DB->request([
+    $activeWindows = !$DB->tableExists(Window::getTable()) ? [] : $DB->request([
         'FROM'  => Window::getTable(),
         'WHERE' => ['status' => Window::STATUS_ACTIVE],
     ]);
@@ -155,6 +180,10 @@ function plugin_monthlyclosing_uninstall(): bool
             $DB->dropTable($table);
         }
     }
+
+    $DB->delete('glpi_profilerights', ['name' => Window::$rightname]);
+    $DB->delete('glpi_displaypreferences', ['itemtype' => Window::class]);
+    unset($_SESSION['glpiactiveprofile'][Window::$rightname]);
 
     $docDir = GLPI_PLUGIN_DOC_DIR . '/monthlyclosing';
     if (is_dir($docDir)) {

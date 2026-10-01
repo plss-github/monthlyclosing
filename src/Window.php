@@ -4,6 +4,7 @@ namespace GlpiPlugin\Monthlyclosing;
 
 use CommonDBTM;
 use CronTask;
+use Glpi\Application\View\TemplateRenderer;
 use Session;
 
 /**
@@ -18,6 +19,8 @@ use Session;
 class Window extends CommonDBTM
 {
     public static $rightname = 'plugin_monthlyclosing_window';
+
+    public $dohistory = true;
 
     const STATUS_PENDING   = 0;
     const STATUS_ACTIVE    = 1;
@@ -36,7 +39,7 @@ class Window extends CommonDBTM
 
     public static function getIcon(): string
     {
-        return 'fas fa-calendar-times';
+        return 'ti ti-calendar-x';
     }
 
     // ------------------------------------------------------------------
@@ -70,6 +73,28 @@ class Window extends CommonDBTM
             self::STATUS_FINISHED  => __('Encerrada', 'monthlyclosing'),
             self::STATUS_CANCELLED => __('Cancelada', 'monthlyclosing'),
         ];
+    }
+
+    /**
+     * Badge HTML (padrão Tabler/GLPI) para o status informado.
+     */
+    public static function getStatusBadge(int $status): string
+    {
+        $styles = [
+            self::STATUS_PENDING   => ['bg-blue-lt', 'ti ti-clock'],
+            self::STATUS_ACTIVE    => ['bg-orange-lt', 'ti ti-lock'],
+            self::STATUS_FINISHED  => ['bg-green-lt', 'ti ti-circle-check'],
+            self::STATUS_CANCELLED => ['bg-secondary-lt', 'ti ti-circle-x'],
+        ];
+        [$class, $icon] = $styles[$status] ?? ['bg-secondary-lt', 'ti ti-help'];
+        $label = static::getStatusLabels()[$status] ?? (string) $status;
+
+        return sprintf(
+            '<span class="badge %s"><i class="%s me-1"></i>%s</span>',
+            $class,
+            $icon,
+            htmlescape($label)
+        );
     }
 
     // ------------------------------------------------------------------
@@ -164,6 +189,15 @@ class Window extends CommonDBTM
         $tab = parent::rawSearchOptions();
 
         $tab[] = [
+            'id'            => '2',
+            'table'         => static::getTable(),
+            'field'         => 'id',
+            'name'          => __('ID'),
+            'datatype'      => 'number',
+            'massiveaction' => false,
+        ];
+
+        $tab[] = [
             'id'       => '11',
             'table'    => static::getTable(),
             'field'    => 'date_start',
@@ -207,64 +241,56 @@ class Window extends CommonDBTM
         return $tab;
     }
 
+    public static function getSpecificValueToDisplay($field, $values, array $options = [])
+    {
+        if (!is_array($values)) {
+            $values = [$field => $values];
+        }
+        if ($field === 'status') {
+            return static::getStatusBadge((int) $values[$field]);
+        }
+        return parent::getSpecificValueToDisplay($field, $values, $options);
+    }
+
+    public static function getSpecificValueToSelect($field, $name = '', $values = '', array $options = [])
+    {
+        if (!is_array($values)) {
+            $values = [$field => $values];
+        }
+        if ($field === 'status') {
+            $options['display'] = false;
+            $options['value']   = $values[$field];
+            return \Dropdown::showFromArray($name, static::getStatusLabels(), $options);
+        }
+        return parent::getSpecificValueToSelect($field, $name, $values, $options);
+    }
+
+    public function defineTabs($options = [])
+    {
+        $tabs = [];
+        $this->addDefaultFormTab($tabs);
+        $this->addStandardTab(\Log::class, $tabs, $options);
+        return $tabs;
+    }
+
     public function showForm($ID, array $options = []): bool
     {
         $this->initForm($ID, $options);
-        $this->showFormHeader($options);
 
-        $isActive   = in_array($this->fields['status'] ?? self::STATUS_PENDING, [self::STATUS_ACTIVE, self::STATUS_FINISHED]);
-        $readonly   = $isActive ? 'readonly' : '';
+        $status = (int) ($this->fields['status'] ?? self::STATUS_PENDING);
+        $labels = static::getStatusLabels();
 
-        echo '<tr class="tab_bg_1">';
-        echo '<td>' . __('Nome', 'monthlyclosing') . '</td>';
-        echo '<td><input type="text" name="name" value="' . htmlescape($this->fields['name'] ?? '') . '" class="form-control" ' . $readonly . '></td>';
-        echo '<td>' . __('Status', 'monthlyclosing') . '</td>';
-        echo '<td>';
-        if ($isActive) {
-            echo static::getStatusLabels()[$this->fields['status']];
-        } else {
-            \Dropdown::showFromArray('status', [
-                self::STATUS_PENDING   => static::getStatusLabels()[self::STATUS_PENDING],
-                self::STATUS_CANCELLED => static::getStatusLabels()[self::STATUS_CANCELLED],
-            ], ['value' => $this->fields['status'] ?? self::STATUS_PENDING]);
-        }
-        echo '</td>';
-        echo '</tr>';
-
-        echo '<tr class="tab_bg_1">';
-        echo '<td>' . __('Início da janela', 'monthlyclosing') . '</td>';
-        echo '<td>';
-        \Html::showDateTimeField('date_start', [
-            'value'    => $this->fields['date_start'] ?? '',
-            'readonly' => $isActive,
+        TemplateRenderer::getInstance()->display('@monthlyclosing/window.form.html.twig', [
+            'item'              => $this,
+            'params'            => $options,
+            'is_locked'         => in_array($status, [self::STATUS_ACTIVE, self::STATUS_FINISHED], true),
+            'status_badge'      => static::getStatusBadge($status),
+            'editable_statuses' => [
+                self::STATUS_PENDING   => $labels[self::STATUS_PENDING],
+                self::STATUS_CANCELLED => $labels[self::STATUS_CANCELLED],
+            ],
         ]);
-        echo '</td>';
-        echo '<td>' . __('Fim da janela', 'monthlyclosing') . '</td>';
-        echo '<td>';
-        \Html::showDateTimeField('date_end', [
-            'value'    => $this->fields['date_end'] ?? '',
-            'readonly' => $isActive,
-        ]);
-        echo '</td>';
-        echo '</tr>';
 
-        echo '<tr class="tab_bg_1">';
-        echo '<td>' . __('Comentário', 'monthlyclosing') . '</td>';
-        echo '<td colspan="3"><textarea name="comment" rows="3" class="form-control">';
-        echo htmlescape($this->fields['comment'] ?? '');
-        echo '</textarea></td>';
-        echo '</tr>';
-
-        if ($ID > 0) {
-            echo '<tr class="tab_bg_2">';
-            echo '<td>' . __('Ativada em', 'monthlyclosing') . '</td>';
-            echo '<td>' . ($this->fields['date_activation'] ?? '—') . '</td>';
-            echo '<td>' . __('Desativada em', 'monthlyclosing') . '</td>';
-            echo '<td>' . ($this->fields['date_deactivation'] ?? '—') . '</td>';
-            echo '</tr>';
-        }
-
-        $this->showFormButtons($options);
         return true;
     }
 
@@ -275,12 +301,35 @@ class Window extends CommonDBTM
             return false;
         }
 
-        if ($input['date_start'] >= $input['date_end']) {
-            Session::addMessageAfterRedirect(__('A data de início deve ser anterior ao fim.', 'monthlyclosing'), true, ERROR);
+        if (!static::validateDates($input['date_start'], $input['date_end'])) {
             return false;
         }
 
+        // Status ativa/encerrada só pode ser definido pelo cron
+        if (!in_array((int) ($input['status'] ?? self::STATUS_PENDING), [self::STATUS_PENDING, self::STATUS_CANCELLED], true)) {
+            $input['status'] = self::STATUS_PENDING;
+        }
+
         return $input;
+    }
+
+    private static function validateDates(string $start, string $end): bool
+    {
+        if (strtotime($start) >= strtotime($end)) {
+            Session::addMessageAfterRedirect(__('A data de início deve ser anterior ao fim.', 'monthlyclosing'), true, ERROR);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Ao excluir uma janela ativa, restaura o autoclose das entidades.
+     */
+    public function cleanDBonPurge()
+    {
+        if ((int) ($this->fields['status'] ?? 0) === self::STATUS_ACTIVE) {
+            RightsManager::restore($this);
+        }
     }
 
     public function prepareInputForUpdate($input)
@@ -289,7 +338,25 @@ class Window extends CommonDBTM
         $lockedStatuses = [self::STATUS_ACTIVE, self::STATUS_FINISHED];
         if (in_array((int) ($this->fields['status'] ?? 0), $lockedStatuses)) {
             unset($input['date_start'], $input['date_end']);
+        } elseif (isset($input['date_start']) || isset($input['date_end'])) {
+            $start = $input['date_start'] ?? $this->fields['date_start'];
+            $end   = $input['date_end'] ?? $this->fields['date_end'];
+            if (empty($start) || empty($end)) {
+                Session::addMessageAfterRedirect(__('Informe as datas de início e fim.', 'monthlyclosing'), true, ERROR);
+                return false;
+            }
+            if (!static::validateDates($start, $end)) {
+                return false;
+            }
         }
+
+        // Pelo formulário só é possível alternar entre pendente e cancelada;
+        // ativa/encerrada são definidas pelo cron (que não envia _from_form)
+        if (isset($input['_from_form'], $input['status'])
+            && !in_array((int) $input['status'], [self::STATUS_PENDING, self::STATUS_CANCELLED], true)) {
+            unset($input['status']);
+        }
+
         return $input;
     }
 }

@@ -1,0 +1,61 @@
+{% import 'components/form/fields_macros.html.twig' as fields %}
+
+<div class="card">
+    <form name="form" action="{{ form_url }}" method="post" data-track-changes="true">
+        {{ fields.csrfField() }}
+
+        <div class="card-body">
+            <div class="row">
+                {{ fields.largeTitle(__('Acesso', 'monthlyclosing'), 'ti ti-user-shield', true) }}
+
+                {{ fields.dropdownArrayField(
+                    'config_profiles_ids',
+                    null,
+                    profiles,
+                    __('Perfis que podem configurar o plugin', 'monthlyclosing'),
+                    {
+                        'multiple': true,
+                        'values': config.config_profiles_ids,
+                        'full_width': true,
+                        'helper': __('Vazio = qualquer perfil com direito de editar a configuração do GLPI.', 'monthlyclosing'),
+                    }
+                ) }}
+
+                {{ fields.dropdownArrayField(
+                    'window_profiles_ids',
+                    null,
+                    profiles,
+                    __('Perfis que podem gerenciar janelas de fechamento', 'monthlyclosing'),
+                    {
+                        'multiple': true,
+                        'values': window_profiles_ids,
+                        'full_width': true,
+                        'helper': __('Criar, editar e excluir janelas de fechamento.', 'monthlyclosing'),
+                    }
+                ) }}
+
+                {{ fields.largeTitle(__('Bloqueio de fechamento', 'monthlyclosing'), 'ti ti-lock') }}
+
+                {{ fields.dropdownArrayField(
+                    'target_profiles_ids',
+                    null,
+                    profiles,
+                    __('Perfis com fechamento bloqueado', 'monthlyclosing'),
+                    {
+                        'multiple': true,
+                        'values': config.target_profiles_ids,
+                        'full_width': true,
+                        'helper': __('Perfis que não podem marcar chamados, problemas e mudanças como Fechados durante uma janela ativa. Vazio = todos. Ações automáticas (cron) são sempre bloqueadas.', 'monthlyclosing'),
+                    }
+                ) }}
+            </div>
+        </div>
+
+        <div class="card-footer d-flex">
+            <button type="submit" name="update" value="1" class="ms-auto btn btn-primary">
+                <i class="ti ti-device-floppy"></i>
+                <span>{{ _x('button', 'Save') }}</span>
+            </button>
+        </div>
+    </form>
+</div>

@@ -9,7 +9,10 @@ $window = new Window();
 if (isset($_POST['add'])) {
     $window->check(-1, CREATE, $_POST);
     $newId = $window->add($_POST);
-    Html::redirect(Window::getFormURLWithID($newId));
+    if ($newId) {
+        Html::redirect(Window::getFormURLWithID($newId));
+    }
+    Html::back();
 } elseif (isset($_POST['update'])) {
     $window->check($_POST['id'], UPDATE);
     $window->update($_POST);
@@ -38,6 +41,6 @@ Html::header(
     Window::class
 );
 
-$window->showForm($ID);
+$window->display(['id' => $ID]);
 
 Html::footer();

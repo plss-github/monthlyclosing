@@ -3,6 +3,7 @@
 namespace GlpiPlugin\Monthlyclosing;
 
 use CommonGLPI;
+use Glpi\Application\View\TemplateRenderer;
 use Session;
 
 /**
@@ -10,8 +11,8 @@ use Session;
  *
  * - Quais perfis podem acessar esta página de configuração
  * - Quais perfis podem gerenciar janelas de fechamento (CRUD)
- *
- * O bloqueio Solucionado → Fechado é universal e não depende de perfil.
+ * - Quais perfis têm o fechamento bloqueado durante uma janela ativa
+ *   (vazio = todos; execuções sem sessão, como o cron, são sempre bloqueadas)
  */
 class Config extends CommonGLPI
 {
@@ -24,13 +25,19 @@ class Config extends CommonGLPI
         return __('Fechamento Mensal — Configuração', 'monthlyclosing');
     }
 
+    public static function getIcon()
+    {
+        return 'ti ti-calendar-cog';
+    }
+
     // ------------------------------------------------------------------
     // Verificação de acesso à configuração
     // ------------------------------------------------------------------
 
     public static function canCurrentProfileConfigure(): bool
     {
-        if (!empty($_SESSION['glpiactiveprofile']['is_super_admin'])) {
+        // Super-admin no GLPI = perfil com direito de editar perfis
+        if (Session::haveRight('profile', UPDATE)) {
             return true;
         }
 
@@ -64,8 +71,35 @@ class Config extends CommonGLPI
         ])->current();
 
         return [
-            'config_profiles_ids' => json_decode($row['config_profiles_ids'] ?? '[]', true) ?: [],
+            'config_profiles_ids' => static::decodeIds($row['config_profiles_ids'] ?? null),
+            'target_profiles_ids' => static::decodeIds($row['target_profiles_ids'] ?? null),
         ];
+    }
+
+    /**
+     * IDs dos perfis com fechamento bloqueado (vazio = todos).
+     */
+    public static function getTargetProfileIds(): array
+    {
+        return static::getConfig()['target_profiles_ids'];
+    }
+
+    /**
+     * Indica se o fechamento deve ser bloqueado para a execução atual.
+     * Sem sessão (cron/CLI) sempre bloqueia.
+     */
+    public static function isClosingBlockedForCurrentProfile(): bool
+    {
+        if (!Session::getLoginUserID() || !isset($_SESSION['glpiactiveprofile']['id'])) {
+            return true;
+        }
+
+        $targets = static::getTargetProfileIds();
+        if (empty($targets)) {
+            return true;
+        }
+
+        return in_array((int) $_SESSION['glpiactiveprofile']['id'], $targets, true);
     }
 
     /**
@@ -100,15 +134,17 @@ class Config extends CommonGLPI
         global $DB;
 
         // --- Perfis que podem acessar a configuração ---
-        $configIds = array_map('intval', (array) ($input['config_profiles_ids'] ?? []));
+        $configIds = static::sanitizeIds($input['config_profiles_ids'] ?? []);
+        $targetIds = static::sanitizeIds($input['target_profiles_ids'] ?? []);
 
         $DB->update(self::TABLE, [
-            'config_profiles_ids' => json_encode(array_values($configIds)),
+            'config_profiles_ids' => json_encode($configIds),
+            'target_profiles_ids' => json_encode($targetIds),
             'date_mod'            => date('Y-m-d H:i:s'),
         ], ['id' => 1]);
 
         // --- Perfis com direito de gerenciar janelas ---
-        $windowIds = array_map('intval', (array) ($input['window_profiles_ids'] ?? []));
+        $windowIds = static::sanitizeIds($input['window_profiles_ids'] ?? []);
 
         // Remove todos os direitos existentes do plugin para reconstruir do zero
         $DB->delete('glpi_profilerights', ['name' => Window::$rightname]);
@@ -128,39 +164,14 @@ class Config extends CommonGLPI
 
     public static function showConfigForm(): void
     {
-        $config         = static::getConfig();
-        $profiles       = static::getAllProfiles();
-        $windowProfiles = static::getWindowProfileIds();
+        global $CFG_GLPI;
 
-        echo '<form method="post" action="' . \Plugin::getWebDir('monthlyclosing') . '/front/config.form.php">';
-        echo '<table class="tab_cadre_fixe">';
-
-        // --- Seção 1: quem pode configurar o plugin ---
-        echo '<tr class="tab_bg_2"><th colspan="2">';
-        echo __('Perfis que podem configurar o plugin', 'monthlyclosing');
-        echo ' <small class="text-muted ms-2">' . __('(vazio = qualquer admin)', 'monthlyclosing') . '</small>';
-        echo '</th></tr>';
-        echo '<tr class="tab_bg_1"><td colspan="2">';
-        static::showProfileCheckboxes('config_profiles_ids', $profiles, $config['config_profiles_ids']);
-        echo '</td></tr>';
-
-        // --- Seção 2: quem pode gerenciar janelas ---
-        echo '<tr class="tab_bg_2"><th colspan="2">';
-        echo __('Perfis que podem gerenciar janelas de fechamento', 'monthlyclosing');
-        echo ' <small class="text-muted ms-2">' . __('(criar, editar e excluir)', 'monthlyclosing') . '</small>';
-        echo '</th></tr>';
-        echo '<tr class="tab_bg_1"><td colspan="2">';
-        static::showProfileCheckboxes('window_profiles_ids', $profiles, $windowProfiles);
-        echo '</td></tr>';
-
-        echo '<tr class="tab_bg_2">';
-        echo '<td colspan="2" class="center">';
-        echo \Html::submit(__('Salvar'), ['name' => 'update']);
-        echo '</td>';
-        echo '</tr>';
-
-        echo '</table>';
-        \Html::closeForm();
+        TemplateRenderer::getInstance()->display('@monthlyclosing/config.html.twig', [
+            'form_url'            => $CFG_GLPI['root_doc'] . '/plugins/monthlyclosing/front/config.form.php',
+            'config'              => static::getConfig(),
+            'profiles'            => static::getAllProfiles(),
+            'window_profiles_ids' => static::getWindowProfileIds(),
+        ]);
     }
 
     // ------------------------------------------------------------------
@@ -181,23 +192,17 @@ class Config extends CommonGLPI
         return $profiles;
     }
 
-    private static function showProfileCheckboxes(string $name, array $profiles, array $selected): void
+    private static function decodeIds(?string $json): array
     {
-        echo '<div class="d-flex flex-wrap gap-3 p-2">';
+        return static::sanitizeIds(json_decode($json ?? '[]', true) ?: []);
+    }
 
-        foreach ($profiles as $id => $label) {
-            $checked = in_array($id, $selected, true) ? 'checked' : '';
-            echo '<div class="form-check form-check-inline">';
-            echo '<input class="form-check-input" type="checkbox"';
-            echo ' name="' . htmlescape($name) . '[]"';
-            echo ' id="' . htmlescape($name) . '_' . $id . '"';
-            echo ' value="' . $id . '" ' . $checked . '>';
-            echo '<label class="form-check-label" for="' . htmlescape($name) . '_' . $id . '">';
-            echo htmlescape($label);
-            echo '</label>';
-            echo '</div>';
-        }
-
-        echo '</div>';
+    /**
+     * Normaliza a lista de IDs (o multi-select do GLPI envia '' quando vazio).
+     */
+    private static function sanitizeIds(mixed $ids): array
+    {
+        $ids = array_map('intval', (array) $ids);
+        return array_values(array_unique(array_filter($ids, static fn (int $id) => $id > 0)));
     }
 }
